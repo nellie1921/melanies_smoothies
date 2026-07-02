@@ -1,30 +1,31 @@
-# Import python packages
 import streamlit as st
 import requests
+import pandas as pd
 
 from snowflake.snowpark.functions import col
 
-# Page title
 st.markdown("## 🥤 Customize Your Smoothie! 🥤")
 st.write("Choose the fruits you want in your custom Smoothie!")
 
-# Customer name
 name_on_order = st.text_input("Name on Smoothie")
 st.write("The name on your Smoothie will be:", name_on_order)
 
-# Connect to Snowflake
+# Snowflake connection
 cnx = st.connection("snowflake")
 session = cnx.session()
 
-# Get available fruits
+# Load fruit list including SEARCH_ON column
 my_dataframe = (
     session.table("SMOOTHIES.PUBLIC.FRUIT_OPTIONS")
-    .select(col("FRUIT_NAME"))
+    .select(col("FRUIT_NAME"), col("SEARCH_ON"))
 )
 
-fruit_options = [row["FRUIT_NAME"] for row in my_dataframe.collect()]
+# Convert to Pandas
+pd_df = my_dataframe.to_pandas()
 
-# Fruit selector
+# Create list of fruit names for the multiselect
+fruit_options = pd_df["FRUIT_NAME"].tolist()
+
 ingredients_list = st.multiselect(
     "Choose up to 5 ingredients:",
     fruit_options,
@@ -39,10 +40,24 @@ if ingredients_list:
 
         ingredients_string += fruit_chosen + " "
 
+        # Find SEARCH_ON value for this fruit
+        search_on = pd_df.loc[
+            pd_df["FRUIT_NAME"] == fruit_chosen,
+            "SEARCH_ON"
+        ].iloc[0]
+
+        st.write(
+            "The search value for",
+            fruit_chosen,
+            "is",
+            search_on,
+            "."
+        )
+
         st.subheader(fruit_chosen + " Nutrition Information")
 
         smoothiefruit_response = requests.get(
-            "https://my.smoothiefroot.com/api/fruit/" + fruit_chosen
+            "https://my.smoothiefroot.com/api/fruit/" + search_on
         )
 
         st.dataframe(
@@ -50,19 +65,14 @@ if ingredients_list:
             use_container_width=True
         )
 
-    st.write("Ingredients:", ingredients_string)
-
     my_insert_stmt = f"""
         INSERT INTO SMOOTHIES.PUBLIC.ORDERS
             (INGREDIENTS, NAME_ON_ORDER)
         VALUES
-            ('{ingredients_string}', '{name_on_order}')
+            ('{ingredients_string.strip()}',
+             '{name_on_order}')
     """
 
-    st.write(my_insert_stmt)
-
-    time_to_insert = st.button("Submit Order")
-
-    if time_to_insert:
+    if st.button("Submit Order"):
         session.sql(my_insert_stmt).collect()
         st.success("Your Smoothie is ordered!", icon="✅")
