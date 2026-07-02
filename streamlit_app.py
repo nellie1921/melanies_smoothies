@@ -24,17 +24,29 @@ my_dataframe = (
 
 fruit_options = [row["FRUIT_NAME"] for row in my_dataframe.collect()]
 
-# Multi-select list
+# Fruit selector
 ingredients_list = st.multiselect(
     "Choose up to 5 ingredients:",
     fruit_options,
     max_selections=5
 )
 
-# If ingredients selected
 if ingredients_list:
 
-    ingredients_string = " ".join(ingredients_list)
+    ingredients_string = ""
+
+    for fruit_chosen in ingredients_list:
+
+        ingredients_string += fruit_chosen + " "
+
+        smoothiefruit_response = requests.get(
+            "https://my.smoothiefroot.com/api/fruit/watermelon"
+        )
+
+        st.dataframe(
+            data=smoothiefruit_response.json(),
+            use_container_width=True
+        )
 
     st.write("Ingredients:", ingredients_string)
 
@@ -52,17 +64,3 @@ if ingredients_list:
     if time_to_insert:
         session.sql(my_insert_stmt).collect()
         st.success("Your Smoothie is ordered!", icon="✅")
-
-
-# ----------------------------------------
-# SmoothieFruit Nutrition Information
-# ----------------------------------------
-
-smoothiefruit_response = requests.get(
-    "https://my.smoothiefroot.com/api/fruit/watermelon"
-)
-
-sf_df = st.dataframe(
-    data=smoothiefruit_response.json(),
-    use_container_width=True
-)
